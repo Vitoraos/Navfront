@@ -84,17 +84,21 @@ export default function Home() {
       
       let done = false;
       let accumulatedContent = '';
+      let buffer = '';
 
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
+          buffer += decoder.decode(value, { stream: true });
           
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6);
+          let newlineIndex;
+          while ((newlineIndex = buffer.indexOf('\n')) >= 0) {
+            const line = buffer.slice(0, newlineIndex).trim();
+            buffer = buffer.slice(newlineIndex + 1);
+            
+            if (line.startsWith('data:')) {
+              const data = line.slice(5).trim();
               if (data === '[DONE]') {
                 done = true;
                 break;
@@ -113,7 +117,7 @@ export default function Home() {
                   ));
                 }
               } catch (e) {
-                // Ignore parsing errors for partial chunks if any
+                // Ignore JSON parse errors for incomplete lines if any
               }
             }
           }
