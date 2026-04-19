@@ -103,6 +103,8 @@ export default function Home() {
                 done = true;
                 break;
               }
+              if (!data) continue;
+              
               try {
                 const parsed = JSON.parse(data);
                 if (parsed.error) {
@@ -117,7 +119,17 @@ export default function Home() {
                   ));
                 }
               } catch (e) {
-                // Ignore JSON parse errors for incomplete lines if any
+                console.error("Failed to parse SSE chunk:", data, e);
+                // The chunk might have been split mid-JSON.
+                // Mobile Debug push
+                setMessages(prev => {
+                  const hasDebug = prev.find(m => m.id === 'debug-error');
+                  const errorMsg = `\nFailed parsing chunk:\n${data}\nError: ${e instanceof Error ? e.message : 'Unknown'}`;
+                  if (hasDebug) {
+                     return prev.map(m => m.id === 'debug-error' ? { ...m, content: m.content + errorMsg } : m);
+                  }
+                  return [{ id: 'debug-error', role: 'assistant', content: errorMsg }, ...prev];
+                });
               }
             }
           }
@@ -125,11 +137,23 @@ export default function Home() {
       }
     } catch (error) {
       console.error(error);
+      const errorMessage = error instanceof Error ? error.message : "Something went wrong";
       setMessages(prev => prev.map(msg => 
         msg.id === assistantMessageId 
-          ? { ...msg, content: msg.content + `\n\n**Error:** ${error instanceof Error ? error.message : "Something went wrong"}` } 
+          ? { ...msg, content: msg.content + `\n\n**Error:** ${errorMessage}` } 
           : msg
       ));
+      
+      // Mobile Debug push
+      setMessages(prev => {
+        const hasDebug = prev.find(m => m.id === 'debug-error');
+        const errLog = `\n[CRITICAL ERROR] ${errorMessage}`;
+        if (hasDebug) {
+           return prev.map(m => m.id === 'debug-error' ? { ...m, content: m.content + errLog } : m);
+        }
+        return [{ id: 'debug-error', role: 'assistant', content: errLog }, ...prev];
+      });
+      
     } finally {
       setMessages(prev => prev.map(msg => 
         msg.id === assistantMessageId 
@@ -288,6 +312,14 @@ export default function Home() {
             <p className="text-xs text-slate-500 mt-1">NavGuard Contextual Engine</p>
           </div>
         </header>
+
+        {/* Debug Banner (Visible only on error) */}
+        {messages.some(m => m.id === 'debug-error') && (
+          <div className="bg-red-50 p-3 text-xs text-red-600 font-mono overflow-auto max-h-32 border-b border-red-100 shrink-0">
+             <strong>Debug Log:</strong>
+             <pre className="whitespace-pre-wrap">{messages.find(m => m.id === 'debug-error')?.content}</pre>
+          </div>
+        )}
 
         {/* Chat Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 md:px-12 scroll-smooth">
